@@ -1,0 +1,29 @@
+OX_4287541393({
+  "ads":{
+    "chain":1,
+    "medium":"w",
+    "record_tmpl":"https://delivery-us-central-1.openx.net/{medium}/1.0/{rtype}?ph=94ef58655625200a8cfc5b15afcd0b94ad52d590&ts={txn_state}",
+    "pixels":"https://us-u.openx.net/w/1.0/pd?plm=10&ph=94ef58655625200a8cfc5b15afcd0b94ad52d590",
+    "oxt": 183.968,
+    "adunits" : [
+      {
+        "auid":"539056892",
+        "chain_timeout":"",
+        "chain":[
+          {
+            "is_fallback":1,
+            "ad_id":"0",
+            "adv_acct_id":"",
+            "width":"970",
+            "height":"90",
+            "html":"<script src='https://www.googletagservices.com/tag/js/gpt.js'>\n  googletag.pubads().definePassback('/1006809/OpenX_PassbackTags/OpenX_PassbackTags_Thrillist', [[970, 98], [970, 93], [970, 91], [970, 92], [970, 99], [970, 94], [970, 97], [970, 96], [970, 95], [970, 90]]).display();\n</script>",
+            "target":"_blank",
+            "ts":"1fHJpZD0yMDA3MWU4MC1hZGM4LTQ0N2QtOGRkNS04NTE5ODgyMmQ2MWZ8cnQ9MTUxNzY4ODU0NXxhdWlkPTUzOTA1Njg5MnxhdW09RE1JRC5XRUJ8YXVwZj1kaXNwbGF5fHNpZD01MzkwNTY1NzF8cHViPTUzOTAzNDg4MXxwYz1VU0R8cmFpZD1kZmY2YzNlNC04MDJkLTQzMjUtYTRjZC05OWFmZjBhMjA1OTl8cnM9MXx1cj1zZXdZR1dka3lH",
+            "type":"html",
+            "ad_url":"<script src='https://www.googletagservices.com/tag/js/gpt.js'>\n  googletag.pubads().definePassback('/1006809/OpenX_PassbackTags/OpenX_PassbackTags_Thrillist', [[970, 98], [970, 93], [970, 91], [970, 92], [970, 99], [970, 94], [970, 97], [970, 96], [970, 95], [970, 90]]).display();\n</script>"
+          }
+        ]
+      }
+    ]
+  }
+});

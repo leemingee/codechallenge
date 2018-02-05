@@ -1,0 +1,19 @@
+var tlcnews = new Array();
+
+tlcnews[tlcnews.length] = ["<a target='_blank' href='http://www.nyc.gov/html/tlc/html/industry/jump_tlcup_portal.shtml'>New Driver and New Vehicle Applicants can now upload required documents through the TLC UP portal. Find out more about this new option!</a>","fi_home_tlcup.png", "NYC TLC","http://www.nyc.gov/html/tlc/html/industry/jump_tlcup_portal.shtml"];
+
+tlcnews[tlcnews.length] = ["<a target='_blank' href='http://www.nyc.gov/html/tlc/html/industry/tlc_safety_honor_roll.shtml'>TLC celebrates honorees at the Fourth Annual TLC Honor Roll Ceremony on October 11, 2017.</a>","feature_secondary_safety_honor_roll.png", "NYC TLC","http://www.nyc.gov/html/tlc/html/industry/tlc_safety_honor_roll.shtml"];
+
+tlcnews[tlcnews.length] = ["<a target='_blank' href='http://www.nyc.gov/html/tlc/html/industry/lease_pilot.shtml'>TLC Announces First Participant in Taxicab Leasing Pilot: Taxi drivers that lease cab participating in the pilot can now work on a percentage-based commission, rather than beginning a shift by making a full lease payment.</a>","participant_taxicab_leasing_pilot.png", "NYC TLC","http://www.nyc.gov/html/tlc/html/industry/lease_pilot.shtml"];
+
+tlcnews[tlcnews.length] = ["<a target='_blank' href='http://www.nyc.gov/html/tlc/html/industry/driver_fatigue.shtml'>On Thursday, February 2, the TLC passed&nbsp;revised fatigued driving prevention  rules. Find out more about the rules and implementation plans! </a>","tlc_driving_hours_postcard.png", "NYC TLC","http://www.nyc.gov/html/tlc/html/industry/driver_fatigue.shtml"];
+
+tlcnews[tlcnews.length] = ["<a target='_blank' href='http://www.nyc.gov/html/tlc/html/licenses/tlc_driver_license.shtml'>The new TLC Driver License will authorize holders to operate all taxi and for-hire vehicles. Find out more about this new license!</a>","fi_home_photo_universal_license.png","NYC TLC","http://www.nyc.gov/html/tlc/html/licenses/tlc_driver_license.shtml"];
+
+tlcnews[tlcnews.length] = ["<a target='_blank' href='http://www.nyc.gov/html/tlc/html/industry/fhv_veh_owners.shtml'>Applications for a New Vehicle License are only accepted online.</br></br>Submit your application here!</a>","fi_home_image_new_vehicle_application.png", "NYC TLC","http://www.nyc.gov/html/tlc/html/industry/fhv_veh_owners.shtml"];
+
+//tlcnews[tlcnews.length] = ["<a target='_blank' href='http://www.nyc.gov/html/tlc/downloads/pdf/press_release_08_03_15.pdf'>Millions of yellow and green taxi trip records are now available online - instantly!</a>","fi_home_photo_trip_records.png","NYC TLC","http://www.nyc.gov/html/tlc/downloads/pdf/press_release_08_03_15.pdf"];
+
+//tlcnews[tlcnews.length] = ["<a target='_blank' href='http://www.nyc.gov/html/tlc/html/industry/drivers.shtml'>Applications for a New TLC Driver License should now be submitted online. Submit your driver application today!</a>","fi_home_submit_new_driver_application_online.png", "NYC TLC","http://www.nyc.gov/html/tlc/html/industry/drivers.shtml"];
+
+//tlcnews[tlcnews.length] = ["<a target='_blank' href='http://www1.nyc.gov/office-of-the-mayor/news/850-16/vision-zero-de-blasio-administration-major-dusk-darkness-safety-initiative-start'>As evenings get darker earlier, the TLC does Vision Zero outreach by sharing palm cards with traffic safety messages to drivers at our licensing facilities and the City's airports. Please be extra vigilant and slow down&ndash;traffic injuries and fatalities historically rise in the dark hours of the colder months.</a>","fi_home_photo_vz_outreach.png","NYC TLC","http://www1.nyc.gov/office-of-the-mayor/news/850-16/vision-zero-de-blasio-administration-major-dusk-darkness-safety-initiative-start"];

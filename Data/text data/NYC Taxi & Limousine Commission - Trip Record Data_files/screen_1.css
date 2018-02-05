@@ -1,0 +1,69 @@
+body, p, td, div, li {font-size:13px;line-height:17px;}
+a {font-size:12px;line-height:15px;}
+.page_title {font-size:14px;}
+.page_subtitle {font-size:14px;}
+.headline {font-size:12px;line-height:15px;}
+.bodytext {font-size:13px;line-height:17px;}
+.bodytextbold {font-size:11px;line-height:15px;}
+.bodytextboldital  {font-size:11px;line-height:15px;}
+.caption {font-size:9px;line-height:11px;}
+.highlight_bodytext {font-size:11px;line-height:15px;}
+.highlight_bodytext_ital {font-size:11px;line-height:15px;}
+.highlight_bodytextbold {font-size:11px;line-height:15px;}
+.highlight_bodytextbold_large {font-size:15px;line-height:21px;}
+.footer_header {font-size:10px;line-height:13px;}
+.footer_text {font-size:10px;line-height:13px;}
+.nav_subsection {font-size:11px;line-height:15px;}
+a.nav_section {font-size:11px;line-height:15px;}
+a.nav_section_active {font-size:11px;line-height:15px;}
+a.nav_subsection {font-size:11px;line-height:15px;}
+a.bodytext_underline {font-size:12px;line-height:15px;}
+a.bodytextbold_underline {font-size:11px;line-height:15px;}
+a.highlight_bodytext_underline {font-size:11px;line-height:15px;}
+.nav_section a{font-size:12px;}
+.nav_section a:hover{font-size:12px;}
+.nav_section#over a{font-size:12px;}
+.nav_home a{font-size:12px;}
+.nav_home a:hover{font-size:12px;}
+.nav_home#over a{font-size:12px;}
+.nav_contact a{font-size:12px;}
+.nav_contact a:hover{font-size:12px;}
+.nav_contact#over a{font-size:12px;}
+.nav_section_active a{font-size:12px;}
+.nav_section_active a:hover{font-size:12px;}
+.nav_section_active#over a{font-size:12px;}
+.nav_subsection{font-size:12px;line-height:14px;}
+.nav_spacer{font-size:8px;line-height:8px;}
+.nav_subsection a{font-size:12px;}
+.nav_subsection_active{font-size:12px;line-height:14px;}
+.nav_subsection_active a{font-size:12px;}
+.blue_nav_top a{font-size:12px;}
+.blue_nav_top a:hover{font-size:12px;}
+.blue_nav_top#over a{font-size:12px;}
+.blue_nav_section a{font-size:12px;}
+.blue_nav_section a:hover{font-size:12px;}
+.blue_nav_section#over a{font-size:12px;}
+.blue_nav_bottom a{font-size:12px;}
+.blue_nav_bottom a:hover{font-size:12px;}
+.blue_nav_bottom#over a{font-size:12px;}
+.iam_title{font-size:12px;}
+.iam_title span{font-size:11px;}
+.iamField{font-size:12px;}
+.news_title_module {font-size:18px;}
+.news_slide_container div{font-size:12px;line-height:15px;}
+.home_grid_content .title {font-size:13px;line-height:25px;}
+.home_grid_content .txt {font-size:12px;line-height:17px;}
+.home_grid_content a {font-size:11px;}
+.home_grid_content a:hover {font-size:11px;}
+.home_grid_spacer { padding-bottom:1px;}
+.popup_field{font-size:12px;line-height:15px;}
+.popup_label{font-size:12px;line-height:15px;}
+.progress_text{font-size:14px;line-height:18px;}
+.yellow_button{font-size:11px;}
+.header-footer-text a {
+	font-family:'Helvetica Neue', Helvetica, Arial, sans-serif;
+	font-weight:bold;
+	font-size:12px;
+	line-height: 12px;
+
+}

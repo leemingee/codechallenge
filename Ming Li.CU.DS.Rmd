@@ -1,0 +1,651 @@
+---
+title: "DS_Challenge"
+author: "Ming Li ming.li2@columbia.edu"
+date: "1/31/2018"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+    toc: true
+---
+```{r initial the playground, message=FALSE, warning=F}
+source("lib/initial.playground.R")
+source("lib/percent.R")
+source("lib/multiplot.R")
+source("lib/fit.model.R")
+source("lib/round.numeric.R")
+```
+
+After finished the analysis process, I sorted out the R scripts I wrote and write this document to record how I process and play with this data set.
+
+# Step 1: Get known of the target and the data itself
+
+Here are the steps I did for this step, takes like 5 to 10 mins.
+
+* Initial the R playground as always, just some useful data manipulation packages.
+
+* Read the instructions in the email, ensure the targets and make the plan.
+
+* Read the data webpage and get some general idea of the data I m going to play with.
+
+From the [website]("http://www.nyc.gov/html/tlc/html/about/trip_record_data.shtml""):
+
+The yellow and green taxi trip records include fields capturing pick-up and drop-off dates/times, pick-up and drop-off locations, trip distances, itemized fares, rate types, payment types, and driver-reported passenger counts.
+
+* Reading the Data Dictionary while this R session is reading the data.
+
+```{r reading the data, echo=T, eval=F}
+green <- fread("https://s3.amazonaws.com/nyc-tlc/trip+data/green_tripdata_2015-09.csv")
+```
+
+And there is two tasks for fread() function to do, one is downloading the files, the other is reading from the memory and convert the files to the charts in R.
+
+To optimize data query process, I may get into some more steps in the future:
+
+* using a spark to access and let the total analysis on the cloud
+
+* implement the reading process via a database process
+
+* If the requirement is not just download the data in Sept 2015, e.g, download all the data in Sept from 2015 to 2018, there must at least a database engaged, or better, the analytics on cloud.
+
+* Luckily, the data is structured, if the data is unstructured, or some parameter in the fread() function is not set properly, I have to download the data again, which is really embrassing. So just using fread() is never enough. I really really need more advanced data query tech. But let's get into it if time is available in the future.
+
+As the origin data takes like 2GB in total, I m going to save it to a rdata image for faster loading in next time. After compress, it takes 35MB. Sounds not so expensive in space.
+
+Here I wrote a simple script without any packages to get out the data links on the [webpage](http://www.nyc.gov/html/tlc/html/about/trip_record_data.shtml).
+```{r, warning=F, message=F}
+doc = readLines("NYC Taxi & Limousine Commission - Trip Record Data.html")
+pattern = "href=.https://.*</a></td>"
+data_lines <- grep(doc, pattern = pattern)
+date <- regexpr(pattern, doc[data_lines])
+links <- regmatches(doc[data_lines], date)
+
+csv.links <- grep(links, pattern = '.csv')
+links <- links[csv.links]
+links <- gsub(links, pattern = "href=\"", replacement = "")
+links <- gsub(links, pattern = "</a></td>", replacement = "")
+head(links, 3)
+```
+
+# Step 2 Data Cleaning
+
+I think every dataset need to be checked before playing with them. There are several ways to do that, like the summary(), qplot(). But as this is a serious data science project, I prefer to check dimension by dimension.
+
+Here are the concerns when I check this data, and this process takes about 10 mins.
+
+* missing values, using the sample filling, deleting, "leave it alone" ways to handle that.
+
+* data type, values, I need to ensure that the data value and type make sense. As the variables here are all common sense variables, so I just make some restraints based on my experience.
+
+* outliners and some particular points, make mind of it but not handling them now. Handling when it s needed for the model part.
+
+# Step 3 Get into the questions
+
+## Question 1
+
+```{r question 1}
+load(file ="Data/013120181645.Rdata")
+```
+In the origin file, there are 1494926 rows and 21 columns in Green dataset. 
+
+After cleaning, there are `r dim(green)[1]` rows and `r dim(green)[2]` rows in Green dataset.
+
+More than 1.11% rows had been deleted or changed, and one column is deleted.
+
+## Question 2
+
+#### Q 2.1
+As the histogram plot process is cheap and may be intuitive, so I just hist() to plot and see what the data looks like.
+
+```{r question 2.1}
+hist(green$Trip_distance)
+```
+
+So it's clear that the data is polarized and the skewed to the right. But how much skewed is this data, I need to take more time to examine. Using quantile here. 
+
+```{r}
+quantile(green$Trip_distance, c(0.5, 0.7, 0.9, 0.99, 0.999, 0.9999, 0.99999))
+```
+
+I decided to set a threshold for the outliner points, which is definited as the point locates further than 3 standard deviation from the mean.
+
+```{r}
+outliner.threshold <- mean(green$Trip_distance) + 3 * sd(green$Trip_distance)
+ggplot(data.frame(green$Trip_distance[which(green$Trip_distance <= outliner.threshold)])) +
+  geom_histogram(aes(x = green$Trip_distance[which(green$Trip_distance <= outliner.threshold)], 
+                     y = ..density..), 
+                 binwidth = 0.1,
+                 color="black", fill="white") +
+  labs(x = "distance", title = "Histogram for Green Taxi Trip Distance exclude the outliners")
+```
+
+And here I use `r percent(sum(green$Trip_distance<=outliner.threshold)/nrow(green))` of total cleaned data for density plot.
+
+```{r}
+ggplot(data.frame(green$Trip_distance[which(green$Trip_distance > 45)])) +
+  geom_histogram(aes(x = green$Trip_distance[which(green$Trip_distance > 45)], 
+                     y = ..density..), 
+                 binwidth = 1,
+                 color="black", fill="white")+
+  labs(x = "distance", title = "Histogram for 99% of Green Taxi Trip Distance")
+```
+
+From the last histogram we can see that the large values are just outliers and we can just distract them from the data if we want to model it.
+
+#### Q 2.2
+
+Report any structure you find and any hypotheses you have about that structure
+
+**Hypothesis**
++ H1: The distribution of trip_distance have a symmetric lognormal distribution. Which implies that the trips data are dependent
+
++ H0: The distribution of trip_distance have a symmetric Gamma distribution. Which implies that the trips data are independent
+
+```{r fit the model using fitdistr, message=F, warning=F}
+gamma.m <- fitdistr(green$Trip_distance[which(green$Trip_distance > 0)],
+         densfun = "gamma")
+lognormal.m <- fitdistr(green$Trip_distance[which(green$Trip_distance >0)],
+                        densfun = "lognormal")
+```
+
+```{r print the model parameter, echo=F}
+cat("gamma model estimate:", gamma.m$estimate, "\n",
+    "lognormal model estimate:", lognormal.m$estimate, "\n")
+```
+
+```{r}
+ggplot(data.frame(green$Trip_distance[which(green$Trip_distance <= outliner.threshold)])) +
+  geom_histogram(aes(x = green$Trip_distance[which(green$Trip_distance <= outliner.threshold)], 
+                     y = ..density..), 
+                 binwidth = 0.1,
+                 color="black", fill="white")+
+  stat_function(aes(x = green$Trip_distance[which(green$Trip_distance <= outliner.threshold)], color = "gamma"), fun = dgamma, args = gamma.m$estimate) +
+  stat_function(aes(x = green$Trip_distance[which(green$Trip_distance <= outliner.threshold)], color = "lognormal"), fun = dlnorm, args = lognormal.m$estimate) +
+  labs(x = "distance", title = "Histogram for Green Taxi Trip Distance exclude the outliners")
+```
+
+From both the plot the and the error of the two models, not reject the H1. It also make sense as the trips in this dataset may have some common routes.
+
+
+## Question 3
+
+#### Q 3.1
+Using dplyr() here to group_by and summarize
+```{r}
+temp <- green[, c("lpep_pickup_datetime", "Trip_distance")]
+temp[, `:=`(hour, mapvalues(x = lpep_pickup_datetime, 
+                            from = lpep_pickup_datetime,
+                            to = hour(lpep_pickup_datetime),
+                            warn_missing = FALSE))]
+
+outcome3 <- ddply(temp, .(hour), plyr::summarize,
+                  mean.distance = round(mean(Trip_distance), 2),
+                  median.distance = round(median(Trip_distance), 2))
+outcome3$hour <- as.numeric(outcome3$hour)
+datatable(outcome3[order(outcome3$hour), ])
+ggplot(data = outcome3) +
+  geom_line(aes(x = hour, y = mean.distance, color = "mean")) +
+  geom_point(aes(x = hour, y = mean.distance, color = "mean")) +
+  geom_line(aes(x = hour, y = median.distance, color = "median"))+
+  geom_point(aes(x = hour, y = median.distance, color = "median"))
+```
+
+#### Q 3.2
+
+Q: Identifying trips that originate or terminate at one of the NYC area airports.
+
+After examining the dictionary of data, there are two possible ways coming up to solve the task:
+
+* Using the RateCodeID, the value of rate code can represent the end of trip. JFK, Newark are included, but not the LaGuardia Airport.
+
+* Using the geographic coordinator of pick-up trips and and drop off trips. From the [website]("https://skyvector.com/airport/LGA/Laguardia-Airport"), we can obtain the coordinator for the airports.
+
+  JFK: 40.64° N, 73.77° W
+
+  Newark: 40.68° N, 74.17° W
+
+  LaGuardia: 40.77° N, -73.87° W
+
+
+* From the [Google Map]("https://www.google.com/maps/place/LaGuardia+Airport/@40.7732619,-73.8773994,15.65z/"), we can obtain the center coordinator for the airports. But if we want to get an interval in coordinates, I didn't find a high accuracy reference for that. After quick search on google, I came across two possible solutions.
+
+**Solution 1** 
+**Low accuracy but must easier**: just use the google map, by selecting the points on map, get the coordinates of points, which can generally find out the coordinates range of LGA airport.
+
+**Solution 2** 
+**Higher accuracy, more controlable but more expensive**: use the Haversine formula to calculate a circle shaped area. If we set the center of the circle area as the LGA coorinators, we can get more precise outcome with reliable GPS data.
+
+**My Concern**
+As there is a saying like $rough \ sense$, and when I was cleaning the data, I found the GPS data are not always reliable, so I would choose the Solution 1. But using the Haversine formula to get how many decimal numbers do I need to get a accuracy of observed longtitude and latitude value. Also get some ideas [here](https://gis.stackexchange.com/questions/142326/calculating-longitude-length-in-miles).
+
+```{r geographic constant}
+lga.lati <- c(40.7653, 40.7732) 
+# lower bound lies in the terminal D and upper bound lies in the Dollar rent a car
+lga.log <- c(-73.8872, -73.8635)
+```
+
+```{r airport filter}
+# For JFK
+sum(green$RateCodeID == 2)
+# For Newark
+sum(green$RateCodeID == 3)
+# For LaGuardia
+lga.pickup <- green[which(Pickup_latitude > lga.lati[1] & 
+                                 Pickup_latitude < lga.lati[2] &
+                                 Pickup_longitude > lga.log[1] & 
+                                 Pickup_longitude < lga.log[2]), ]
+nrow(lga.pickup)
+datatable(data.frame(
+  LGA.pickup = c(
+  ave.distance = mean(lga.pickup$Trip_distance),
+  ave.tip = mean(lga.pickup$Tip_amount),
+  ave.fare = mean(lga.pickup$Fare_amount)),
+  
+  JFK.dropoff = c(
+  ave.distance = mean(green$Trip_distance[which(green$RateCodeID == 2)]),
+  ave.tip = mean(green$Tip_amount[which(green$RateCodeID == 2)]),
+  ave.fare = mean(green$Fare_amount[which(green$RateCodeID == 2)])),
+  
+  EWR.dropoff = c(
+  ave.distance = mean(green$Trip_distance[which(green$RateCodeID == 3)]),
+  ave.tip = mean(green$Tip_amount[which(green$RateCodeID == 3)]),
+  ave.fare = mean(green$Fare_amount[which(green$RateCodeID == 3)]))
+))
+
+```
+
+Also, one map will be really helpful to show whether it's a good selection from the whole data. Take the LGA airport for example. 
+
+I did this example for fun, but when the map comes out, I feel really really relief and happy for my $indeed \ rough$ method works.
+
+
+```{r}
+lga.map <- leaflet(data = lga.pickup)
+lga.map <- addTiles(lga.map)
+lga.map <- addCircleMarkers(lga.map, ~ Pickup_longitude, ~ Pickup_latitude, radius = 1.5, color = "red")
+lga.map
+```
+
+
+## Question 4
+
+### Intro for modeling
+
+I choose linear regression as the predictive model for its simplicity and interpretability. As we have 10 predictive variables, overfitting maybe a problem. Thus, we combined forward and backward selection methods to detect variables with most significant influence on the percentage of tip. 
+
+### Step 1 Data Cleaning
+
+Even though in the data cleaning step, I had cleaned the whole dataset and make sure that the Fare_amount are non-negative. But when it comes to the percentage, I also need to add two restraints to the data to ensure quality.
+
++ Delete the zero value in Fare_amount.
+
++ Delete rows which has total.amount less than 2.5, as the initial charge for NYC green taxi is [2.5 USD]("http://www.nyc.gov/html/tlc/html/about/trip_record_data.shtml").
+
+```{r}
+# datatable(head(green[which(green$Fare_amount == 0)]))
+# cat(sum(green$Fare_amount == 0), 
+#     sum(is.na(green$Fare_amount)),
+#     nrow(subset(green, Fare_amount == 0 & RateCodeID == 5)))
+green.predict <- subset(green, Fare_amount != 0)
+green.predict[, `:=`(tip.fare.percent, (Tip_amount/Fare_amount)*100)]
+generous.green <- green.predict[which(green.predict$tip.fare.percent > 100), ]
+```
+
+```{r}
+par(mfrow = c(1,2))
+plot(green.predict$RateCodeID, green.predict$tip.fare.percent, 
+     xlim = c(0, 7), ylim = c(0, 100))
+plot(green.predict$Payment_type, green.predict$tip.fare.percent)
+```
+```{r}
+green.predict <- subset(green.predict, lpep_pickup_datetime != Lpep_dropoff_datetime &
+                          Payment_type == 1 &
+                          tip.fare.percent <= 100)
+```
+
+I intend to convert the continuous data to labels, including the dropoff, pickup time and geographical information. Reference includes [spatial data process in R](https://cran.r-project.org/doc/contrib/intro-spatial-rl.pdf) and [Zillow Neighborhood Boundaries](https://www.zillow.com/howto/api/neighborhood-boundaries.htm)
+
++ Generate the time feature
+
+```{r, warning=F}
+green.predict[, `:=`(hour.pickup, mapvalues(x = lpep_pickup_datetime, 
+                                            from = lpep_pickup_datetime, 
+                                            to = hour(lpep_pickup_datetime),
+                                            warn_missing = FALSE))]
+green.predict[, `:=`(hour.dropoff, mapvalues(x = Lpep_dropoff_datetime, 
+                                            from = Lpep_dropoff_datetime, 
+                                            to = hour(Lpep_dropoff_datetime),
+                                            warn_missing = FALSE))]
+
+```
+
++ As there are always some events and festivals in NYC, I'd like to extract whether the influential and famous events had impact on the tips percentage. It's reasonable to think about that because when there comes an event, the traffic become more jammed, in the meantime people may get more happy.
+
+**If given more time**, I d like to analyse this thesis more precisely, I need to take out the event's location and date, approximate time in a day to analyse that. For now, I just spend few minutes to extract the dates and see how many trips happened in those dates.
+
+```{r, warning=F, message=F}
+doc <- readLines("Data/text data/The 16 Best Things To Do In NYC in September - 2015 - Thrillist.html")
+pattern <- "Sep\\s[0-9]*"
+data_lines <- grep(doc, pattern = pattern)
+date <- regexpr(pattern, doc[data_lines]) 
+date <- regmatches(doc[data_lines], date)
+unique(date)
+events.day <- as.numeric(gsub(date, pattern = "Sep ", replacement = ""))
+trips.in.day <- as.data.frame(table(day(green.predict$lpep_pickup_datetime)))
+trips.in.day$festival <- rep("nonfestival.day", nrow(trips.in.day))
+trips.in.day$festival[which(trips.in.day$Var1 %in% events.day)] <- "festival.day"
+ggplot(data = trips.in.day) +
+  geom_point(aes(x = Var1, y = Freq, color = festival))+
+  labs(xlab = "day", ylab = "Counts", title = "trips in festival.day or nonfestival day")
+```
+
++ Generate the location feature
+
+```{r, warning=F, message=F, eval = F}
+library(rgdal)
+sharp.nyc <- readOGR("Data/ZillowNeighborhoods-NY.shp", layer="ZillowNeighborhoods-NY")
+classifier = sharp.nyc[sharp.nyc$City == 'New York', ]
+Location_Data_Pickup <- data.frame(Longitude = green.predict$Pickup_longitude, 
+                                   Latitude = green.predict$Pickup_latitude)
+Location_Data_Dropoff <- data.frame(Longitude = green.predict$Dropoff_longitude, 
+                                   Latitude = green.predict$Dropoff_latitude)
+# Identify the pickup borough
+coordinates(Location_Data_Pickup) <- ~ Longitude + Latitude
+proj4string(Location_Data_Pickup) <- proj4string(classifier)
+County_Pickup = as.character(over(Location_Data_Pickup, classifier)$County)
+# Identify the dropoff borough
+coordinates(Location_Data_Dropoff) <- ~ Longitude + Latitude
+proj4string(Location_Data_Dropoff) <- proj4string(classifier)
+```
+```{r}
+County_Dropoff = as.character(over(Location_Data_Dropoff, classifier)$County)
+green.predict$County_Pickup = County_Pickup
+green.predict$County_Dropoff = County_Dropoff
+# this code block is from Weiye Deng, www.github.com/dwy904
+green.predict <- na.omit(green.predict)
+
+# "Kings"    "Queens"   "New York" "Bronx"    "Richmond"
+# which is a categorical data
+```
+
+
++ Generate the trip duration and trip riders
+```{r some constant}
+trip.distance.cuts <- quantile(green.predict$Trip_distance, c(0.25, 0.5, 0.75, 0.9))
+passenger.cuts <- c(2, 3, 5)
+hours.replace <- c(rep("midnight", 5), rep("normal", 2), rep("rush", 2), rep("normal", 3), rep("rush", 2), rep("normal", 3), rep("rush", 2), rep("normal", 4), "midnight")
+```
+
+```{r}
+green.predict[, `:=`(passenger_bracket, cut2(x = Passenger_count, cuts = passenger.cuts))]
+green.predict[, `:=`(passenger_bracket, mapvalues(x = passenger_bracket, from = unique(passenger_bracket), to = c(1:4)))]
+green.predict[, `:=`(distance_bracket, cut2(x = Trip_distance, cuts = trip.distance.cuts))]
+green.predict[, `:=`(hour.pickup.class, mapvalues(x = hour.pickup, from = as.character(c(0:23)), to = hours.replace))]
+green.predict[, `:=`(hour.dropoff.class, mapvalues(x = hour.dropoff, from = as.character(c(0:23)), to = hours.replace))]
+
+green.predict[, `:=`(Store_and_fwd_flag, mapvalues(x = Store_and_fwd_flag, from = c("N", "Y"), to = c(0, 1)))]
+```
+
+In order to make the feature more explicit, I split the continuous value to brackets.
+
+```{r}
+# decode for the numeric values
+green.predict[, `:=`(County_Pickup, mapvalues(x = County_Pickup,
+                                              from = unique(County_Pickup),
+                                              to = c(1:5)))]
+green.predict[, `:=`(County_Dropoff, mapvalues(x = County_Dropoff,
+                                              from = unique(County_Dropoff),
+                                              to = c(1:5)))]
+hours.replace <- mapvalues(hours.replace, from = c("normal", "rush", "midnight"),
+                           to = c(1,2,3))
+green.predict[, `:=`(hour.pickup.class, mapvalues(x = hour.pickup, from = as.character(c(0:23)), to = hours.replace))]
+green.predict[, `:=`(hour.dropoff.class, mapvalues(x = hour.dropoff, from = as.character(c(0:23)), to = hours.replace))]
+green.predict[, `:=`(distance_bracket, mapvalues(x = distance_bracket, from = unique(distance_bracket), to = c(1:5)))]
+
+```
+
+```{r}
+green.predict.cleaned <- green.predict[, c("VendorID", "RateCodeID",
+                                           "Store_and_fwd_flag",
+                                   "Fare_amount", "Trip_type", "tip.fare.percent",
+                                   "Trip_distance", "Passenger_count",
+                                   "County_Pickup", "County_Dropoff", 
+                                   "passenger_bracket",
+                                   "distance_bracket",
+                                   "hour.pickup.class",
+                                   "hour.dropoff.class")]
+# write.csv(green.predict.cleaned, "cleaned.newest.csv")
+```
+
+Here I got a `r ncol(green.predict.cleaned)` columns dataset which will be used for modeling.
+
+
+```{r, echo = F}
+load("Data/020220181300.RData")
+```
+
+### Step 2 Forward Selection
+
+Include each variable in the model one by one, and choose the one with most significant effect as our first candidate variable. 
+
+Most of our variables are categorical, so we need to construct dummy variables for each predictive variable and consider their significance as a whole. Therefore, we focus on the p-vaule of F-test, which measures the overall significance of the association between predictive variables and response variables. Here, smaller p-value indicates greater siginificance.
+
+```{r, eval=F}
+v_p <- rep(0, 10)
+## fare_amount
+model1 <- lm(cleaned$tip.fare.percent~cleaned$Fare_amount)
+s1 <- summary(model1)
+f1 <- s1$fstatistic
+v_p[1] <- pf(f1[1],f1[2],f1[3],lower.tail=FALSE)
+
+## RateCodeID
+dummies2 <- data.frame(model.matrix(~factor(RateCodeID), data = cleaned))
+model2 <- lm(cleaned$tip.fare.percent~dummies2$factor.RateCodeID.2 + dummies2$factor.RateCodeID.3
+             + dummies2$factor.RateCodeID.4 + dummies2$factor.RateCodeID.5)
+s2 <- summary(model2)
+f2 <- s2$fstatistic
+v_p[2] <- pf(f2[1],f2[2],f2[3],lower.tail=FALSE)
+
+## Store_and_fwd_flag
+dummies3 <- data.frame(model.matrix(~factor(Store_and_fwd_flag), data = cleaned))
+model3 <- lm(cleaned$tip.fare.percent~dummies3$factor.Store_and_fwd_flag.1)
+s3 <- summary(model3)
+f3 <- s3$fstatistic
+v_p[3] <- pf(f3[1],f3[2],f3[3],lower.tail=FALSE)
+
+## Trip_type
+dummies4 <- data.frame(model.matrix(~factor(Trip_type), data = cleaned))
+model4 <- lm(cleaned$tip.fare.percent~dummies4$factor.Trip_type.2)
+s4 <- summary(model4)
+f4 <- s4$fstatistic
+v_p[4] <- pf(f4[1],f4[2],f4[3],lower.tail=FALSE)
+
+## County_Pickup
+dummies5 <- data.frame(model.matrix(~factor(County_Pickup), data = cleaned))
+model5 <- lm(cleaned$tip.fare.percent~dummies5$factor.County_Pickup.2+dummies5$factor.County_Pickup.3
+             +dummies5$factor.County_Pickup.4 + dummies5$factor.County_Pickup.5)
+s5 <- summary(model5)
+f5 <- s5$fstatistic
+v_p[5] <- pf(f5[1],f5[2],f5[3],lower.tail=FALSE)
+
+## County_Dropoff
+dummies6 <- data.frame(model.matrix(~factor(County_Dropoff), data = cleaned))
+model6 <- lm(cleaned$tip.fare.percent~dummies6$factor.County_Dropoff.2+dummies6$factor.County_Dropoff.3
+             +dummies6$factor.County_Dropoff.4 + dummies6$factor.County_Dropoff.5)
+s6 <- summary(model6)
+f6 <- s6$fstatistic
+v_p[6] <- pf(f6[1],f6[2],f6[3],lower.tail=FALSE)
+
+## passenger_bracket
+dummies7 <- data.frame(model.matrix(~factor(passenger_bracket), data = cleaned))
+model7 <- lm(cleaned$tip.fare.percent~dummies7$factor.passenger_bracket.2+dummies7$factor.passenger_bracket.3
+             +dummies7$factor.passenger_bracket.4)
+s7 <- summary(model7)
+f7 <- s7$fstatistic
+v_p[7] <- pf(f7[1],f7[2],f7[3],lower.tail=FALSE)
+
+## distance_bracket
+dummies8 <- data.frame(model.matrix(~factor(distance_bracket), data = cleaned))
+model8 <- lm(cleaned$tip.fare.percent~dummies8$factor.distance_bracket.2+dummies8$factor.distance_bracket.3
+             +dummies8$factor.distance_bracket.4+ dummies8$factor.distance_bracket.5)
+s8 <- summary(model8)
+f8 <- s8$fstatistic
+v_p[8] <- pf(f8[1],f8[2],f8[3],lower.tail=FALSE)
+
+## hour.pickup.class
+dummies9 <- data.frame(model.matrix(~factor(hour.pickup.class), data = cleaned))
+model9 <- lm(cleaned$tip.fare.percent~dummies9$factor.hour.pickup.class.2+dummies9$factor.hour.pickup.class.3)
+s9 <- summary(model9)
+f9 <- s9$fstatistic
+v_p[9] <- pf(f9[1],f9[2],f9[3],lower.tail=FALSE)
+
+## hour.dropoff.class
+dummies10 <- data.frame(model.matrix(~factor(hour.dropoff.class), data = cleaned))
+model10 <- lm(cleaned$tip.fare.percent~dummies10$factor.hour.dropoff.class.2+dummies10$factor.hour.dropoff.class.3)
+s10 <- summary(model10)
+f10 <- s10$fstatistic
+v_p[10] <- pf(f10[1],f10[2],f10[3],lower.tail=FALSE)
+```
+
+v_p summarize all the p-values of our candidate predictive variable: 
+```{r}
+v_p
+```
+
+All of the p-values are small, the 1st, 2nd, 4th, 5th, 6th and 8th p-values are so small that we only got 0 values in R. So we focus on them in our following examination. To be more specific, they are Fare_amount, RateCodeID, Trip_type, County_Pickup, County_Dropoff, distance_bracket.
+
+Based on our analysis above, Fare_amount may be the most influential variable for percentage of tips. So we include it in our initial models and add more variables in the following analysis.
+
+### Step 3 Wald Test
+
+Set up "tip.fare.percent~Fare_amount" as the baseline model and add RateCodeID, Trip_type, County_Pickup, County_Dropoff, distance_bracket at one time.
+
+We use wald test to measure the significance of added variable. And notice that we also detete insignificant level in each categorical variable to avoid overfitting and redundancy.
+
+```{r, eval=F}
+v_p2 <- rep(0, 5)
+## Fare_amount + RateCodeID
+model11 <- lm(cleaned$tip.fare.percent~ cleaned$Fare_amount + dummies2$factor.RateCodeID.2 
+              + dummies2$factor.RateCodeID.3 + dummies2$factor.RateCodeID.4 + dummies2$factor.RateCodeID.5)
+## delete insignificant level factor.RateCodeID.3
+model12<- lm(cleaned$tip.fare.percent~ cleaned$Fare_amount + dummies2$factor.RateCodeID.2 
+             dummies2$factor.RateCodeID.4 + dummies2$factor.RateCodeID.5)
+v_p2[1] <- waldtest(model1, model12)[[4]][2]
+
+## Fare_amount + Trip_type
+model13 <- lm(cleaned$tip.fare.percent~ cleaned$Fare_amount + dummies4$factor.Trip_type.2)
+v_p2[2] <- waldtest(model1, model13)[[4]][2]
+
+## Fare_amount + County_Pickup
+model14 <- lm(cleaned$tip.fare.percent~ cleaned$Fare_amount+ dummies5$factor.County_Pickup.2
+              +dummies5$factor.County_Pickup.3
+              +dummies5$factor.County_Pickup.4 + dummies5$factor.County_Pickup.5)
+## delete insignificant level factor.County_Pickup.5
+model15 <- lm(cleaned$tip.fare.percent~ cleaned$Fare_amount+ dummies5$factor.County_Pickup.2
+              +dummies5$factor.County_Pickup.3 +dummies5$factor.County_Pickup.4)
+v_p2[3] <- waldtest(model1, model15)[[4]][2]
+
+## Fare_amount + County_Dropoff
+model16 <- lm(cleaned$tip.fare.percent~ cleaned$Fare_amount+ dummies6$factor.County_Dropoff.2
+              +dummies6$factor.County_Dropoff.3
+              +dummies6$factor.County_Dropoff.4 + dummies6$factor.County_Dropoff.5)
+v_p2[4] <- waldtest(model1, model16)[[4]][2]
+
+## Fare_amount + distance_bracket
+model17 <- lm(cleaned$tip.fare.percent~ cleaned$Fare_amount+dummies8$factor.distance_bracket.2
+              +dummies8$factor.distance_bracket.3
+              +dummies8$factor.distance_bracket.4+ dummies8$factor.distance_bracket.5)
+v_p2[5] <- waldtest(model1, model17)[[4]][2]
+```
+
+v_p2 summarize all the p-values in step2:
+```{r}
+v_p2
+```
+
+All the p-value are 0, and we couldn't distinguish their discrepancy. Therefore, we include all of them into our model and perform backward selection.
+
+### Step 4 Backward selection
+
+```{r, eval=F}
+model18 <- lm(cleaned$tip.fare.percent~ cleaned$Fare_amount
+              + dummies2$factor.RateCodeID.2 + dummies2$factor.RateCodeID.4 + dummies2$factor.RateCodeID.5  
+              + dummies4$factor.Trip_type.2
+              + dummies5$factor.County_Pickup.2+dummies5$factor.County_Pickup.3 +dummies5$factor.County_Pickup.4
+              + dummies6$factor.County_Dropoff.2+dummies6$factor.County_Dropoff.3+dummies6$factor.County_Dropoff.4 + dummies6$factor.County_Dropoff.5
+              +dummies8$factor.distance_bracket.2+dummies8$factor.distance_bracket.3+dummies8$factor.distance_bracket.4+ dummies8$factor.distance_bracket.5)
+```
+
+Drop insignificant variables factor.Trip_type.2, factor.County_Dropoff.2
+
+```{r,eval=F}
+model19 <- lm(cleaned$tip.fare.percent~ cleaned$Fare_amount
+              + dummies2$factor.RateCodeID.2 + dummies2$factor.RateCodeID.4 + dummies2$factor.RateCodeID.5  
+              + dummies5$factor.County_Pickup.2+dummies5$factor.County_Pickup.3 +dummies5$factor.County_Pickup.4
+              + dummies6$factor.County_Dropoff.3+dummies6$factor.County_Dropoff.4 + dummies6$factor.County_Dropoff.5
+              + dummies8$factor.distance_bracket.2+dummies8$factor.distance_bracket.3+dummies8$factor.distance_bracket.4+ dummies8$factor.distance_bracket.5)
+```
+```{r}
+linear.regression.summary(model19)
+```
+
+Finally, we get all of our predictive variables significant. 
+
+The Formula:
+
+$tip.fare.percent =  23.7338 - 0.0861\times Fare_amount + 4.4705 \times RateCodeID.2 + 6.9794 \times RateCodeID.4 - \\5.2205 \times RateCodeID.5 - 0.9551 \times County_Pickup.2 - 2.1645 \times County_Pickup.3$
+
+## Question 5
+
+I create a Shiny App which can be find in the folder or [published webpage](https://mingcolumbiads.shinyapps.io/nycgreenming/).
+
+# Further Thoughts
+
+### Thoughts for Question 3 How to define the airport area
+
+This solution can really be optimized because I didn't get a mathematical definition for trips that originate or terminate at airports. For example, with [Haversine Formula](https://en.wikipedia.org/wiki/Haversine_formula) and the [packaged function](https://cran.r-project.org/web/packages/geosphere/geosphere.pdf) to implement this formula, I can just select a radius, let's say, 1 miles, from the center of airports, then we can make the solution more flexible and accurate. But as time limited, I will not go deeper for this idea.
+
+
+### Thoughts for Modeling: Stiny and Generous Customer Pattern
+
+After examination and a reall looking into the data, I found that there is a pattern that zero Fare_amount usually comes with a RateCodeID equals to 5, which represents the $Negotiated\ fare$. So there may be some story behind each zero Fare_amount. But now I m just going to delete them due to they are the outliers.
+
+When I re-check the value of tip.fare.percent, it shows that there are still records which shows the percentage archieves values more than 100, it's not such a big problem as the Fare_amount being zero. Maybe there are some people who are just generous and grateful. But we need to look at the data again to find the pattern behind that.
+
+```{r, warning=F}
+num.upperbd.distance <- function(upper.bound){
+  return(
+     nrow(green.predict[which(generous.green$Trip_distance <= upper.bound)])
+  )
+}
+
+trip.distance.interval <- seq(0.5, 4, 0.1)
+generous.num <- apply(as.matrix(trip.distance.interval), MARGIN = 1,
+                      FUN = num.upperbd.distance)
+par(mfrow = c(1,2))
+plot(trip.distance.interval, generous.num,  xlab = "trip_distance",
+     ylab = "Frequency", main = "Frequency vs Trip_distance")
+plot(table(hour(generous.green$lpep_pickup_datetime)), xlab = "time",
+     ylab = "Frequency", main = "Frequency vs pick-up time")
+```
+
+So for that we can get some basic sense of those generous customers (definited as the tip amount more than fare amount in that trip):
+
++ The generous customer usually took the ride during midnight, but during the dawn (4 AM to 7 AM), customers did't tend to give generous tips.
+
++ The generous tips usually happened when the trip is really short. Half of the generous-tip trip had distance shorter than 1.5 miles, whihc can be covered in about 10 mins on foot in normal condition.
+
+**if given more time**, I will add label as district and blocks to the generous custom data set, and I m really curious about whether there will be some relation between the district the trip happens and the generous actions.
+
+
+### Thoughts for Modeling Data Recover
+
+I think the most important step in the data clean part is to find out that **the tip can't be recorded in the database unless the payment type is equal to 1**, namely, credit card. Based on my experience, that conclusion is really apparent as the customer will need to input both fare and tip when pay by card on cab. With this conclusion, the data size used for modeling has been reduced to half.
+
+This conclusion can also be drawed by some EDA algorithms such as linear model, or lasso or just calculate the cor matrix. But the plot will be cheaper and more intuisive.
+
+But as for the tip amount in other scenarios, like cash, there comes two questions:
+
++ Is is necessary to recover the tip_amount in other scenarios? Namely, is the tip_amount paid by credit card can represent the tip_amount in all scenarios.
+
++ Can we recover the tip_amount by the given data or experience? we can have some assumptions here, like: if one customer pay by cash, the tip is added into the fare_amount. **If given more time**, I may try to recover those data.

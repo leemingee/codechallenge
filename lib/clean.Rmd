@@ -1,0 +1,165 @@
+---
+title: "Cleaning"
+author: "Ming Li ming.li2@columbia.edu"
+date: "2/1/2018"
+output: 
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+    toc: true
+---
+## Step 2 Check the data
+
+I think every dataset need to be checked before playing with them. There are several ways to do that, like the summary(), qplot(). But as this is a serious data science project, I prefer to check dimension by dimension.
+
+Here are the concerns when I check this data, and this process takes about 10 mins.
+
++ missing values, using the sample filling, deleting, "leave it alone" ways to handle that.
+
++ data type, values, I need to ensure that the data value and type make sense. As the variables here are all common sense variables, so I just make some constrains based on my experience.
+
++ outliners and some particular points, make mind of it but not handling them now. Handling when it s needed for the model part.
+
+```{r initial the playground, message=FALSE, warning=F}
+source("lib/initial.playground.R")
+load(file ="Data/013120181600.RData")
+```
+
+### Check the missing values
+```{r check the missing values}
+mean_missing <- function(x) {
+    return(sum(x = is.na(x)))
+}
+datatable(t(green[, lapply(X = .SD, FUN = "mean_missing")]))
+green <- green[, -'Ehail_fee']
+```
+So here is one column called Ehail_fee, and there are only `r NA` values here. And this column is not displayed in the dictionary either, so I just delete it. Also, this is a high quality data as there are not so much NAs. Feel Happy For That!
+
+### Checking the categorical variables
+```{r check the cvariables}
+# check the VendorID
+table(green$VendorID)
+# check the RateCodeID
+table(green$RateCodeID)
+# check the store_and_fwd_flag
+table(green$Store_and_fwd_flag)
+# check the payment type
+table(green$Payment_type)
+# check the trip_type
+table(green$Trip_type)
+```
+So most variables are really nice, but there is a value $99$ in the $RateCodeID$ variable, which is not in the dictionary. There are only 6 values of them, so I think I can just print it out and see what the other variables in those rows acts. If the whole record is missing or make nonsense, I can just delete it.
+
+#### Clean the categorical data
+```{r print out the inregular rows}
+datatable(
+  green[which(green$RateCodeID == 99), ]
+)
+green <- green[-which(green$RateCodeID == 99), ]
+```
+
+Based on the dropoff_longtitude is 0, I decide to delete the last 5 rows. Due to the fare_amount fee to be 0, I decided to delelte the first one.
+
+### Checking the Continuous values
+#### Check the passenger count
+```{r}
+# check the passenger count
+table(green$Passenger_count)
+sum(green$Passenger_count == 0)/nrow(green)
+green <- green[-which(green$Passenger_count == 0), ]
+```
+After quick searching on Google, I still find the passenger_count equals to 0 means to be an inregular thing, so I need to clean it.
+
+####  Check the distance
+```{r}
+sum(green$Trip_distance <= 0)
+# check the distance less than 0 && the total amount less than 0
+nrow(green[which(green$Total_amount <= 0 & green$Trip_distance <= 0)])
+green <- green[-which(green$Total_amount <= 0 & green$Trip_distance <= 0), ]
+```
+Here I deleted the rows which both total_amount and trip_distance are less or equal to 0, which means the record means nothing as NA.
+
+#### Check the amounts
+```{r}
+cat(sum(green$Total_amount < 0),
+sum(green$Tip_amount < 0),
+sum(green$Fare_amount < 0),
+sum(green$Extra < 0),
+sum(green$MTA_tax < 0),
+sum(green$Tolls_amount < 0),
+sum(green$improvement_surcharge < 0), "\n")
+summary(green$Fare_amount[which(green$Fare_amount < 0)])
+```
+
+#### Clean the amounts
+After reading the (rate explanation file)[http://www.nyc.gov/html/tlc/html/passenger/taxicab_rate.shtml] online, I decide to reverse all the MTA_tax, Extra, improvement_surcharge to positive numbers in the data dictionary.
+
+When it comes to the Extra, there is a term named "rush hour", as I didn't have a car now, I didn't experience the rush hour myself, so I refer to (this website)[http://www.nytimes.com/1987/09/09/nyregion/new-york-rush-hours-grow-earlier-and-later.html?pagewanted=all] to get known of the rush hour period in NYC.
+
+```{r}
+green$MTA_tax[which(green$MTA_tax < 0)] <- 0.5
+green$Extra[which(green$Extra < 0 & (
+  (hour(green$lpep_pickup_datetime) > 7 & hour(green$lpep_pickup_datetime) < 9) |
+    (hour(green$lpep_pickup_datetime) > 16 & hour(green$lpep_pickup_datetime) < 18)))] <- 1
+green$Extra[which(green$Extra < 0)] <- 0.5
+green$improvement_surcharge[which(green$improvement_surcharge < 0)] <- 0.3
+```
+
+As for the Tolls_amount, I decided to look into it as there are only 7 of them.
+
+```{r}
+green$Tolls_amount[which(green$Tolls_amount < 0)]
+green$Tolls_amount[which(green$Tolls_amount < 0)] <- abs(green$Tolls_amount[which(green$Tolls_amount < 0)])
+```
+
+The hardest part, Fare_amount, from the above array we can see the most negative amounts exists when the Fare_amount is negative. As I can't go through this dataset line by line, which is really expensive, let me make some assumptions:
+
++ Assumption 1: The trip_distance equal to 0 and the total amount are just the sum of extra fee, mta_tax and improvement_surcharge. So I can just delete it because this kind of trip means nothing as NA for analysis.
+
++ Assumption 2: The trip_distance is not 0, and the fare_amount is not 0 or a small number, so in this situation, I assume the amount is wrong, just make that a positive number. In the meantime.
+
+```{r}
+# deleting the meaningless records
+green <- green[-which(green$Trip_distance == 0 & green$Fare_amount <= 0)]
+green <- green[-which(green$Trip_distance == 0 & green$Tip_amount <= 0)]
+# abs the fare_amount
+green[Fare_amount < 0, 'Fare_amount'] <- abs(green[Fare_amount < 0, 'Fare_amount'])
+green[Tip_amount < 0, 'Tip_amount'] <- abs(green[Tip_amount < 0, 'Tip_amount'])
+# recalulate the total amount again.
+green[, 'Total_amount'] <- sum(green[, seq(12:18)], na.rm = T)
+```
+
+#### Recheck the amounts
+```{r}
+cat(sum(green$Total_amount <= 0),
+sum(green$Tip_amount < 0),
+sum(green$Fare_amount < 0),
+sum(green$Extra < 0),
+sum(green$MTA_tax < 0),
+sum(green$Tolls_amount < 0),
+sum(green$improvement_surcharge < 0))
+```
+
+### Checking the time
+
+```{r check time}
+table(month(green$Lpep_dropoff_datetime))
+sum(day(green$lpep_pickup_datetime)==31)
+```
+
+After the examination, I found that there are some of the date are in October. And I think there is no need to delete it or replace them at present as I will not apply some time-series model for this dataset now.
+
+### Check the geographical data
+```{r}
+cat(unique(floor(green$Pickup_longitude)), "\n",
+unique(floor(green$Pickup_latitude)), "\n",
+unique(floor(green$Dropoff_latitude)), "\n",
+unique(floor(green$Dropoff_longitude)), "\n")
+
+cat(sum(floor(green$Pickup_longitude) == 0),
+    sum(floor(green$Pickup_latitude) == 0),
+    sum(floor(green$Dropoff_latitude) == 0),
+    sum(floor(green$Dropoff_longitude) == 0))
+```
+
+I don't know how to deal with that, the only solution I can think about is just delete them. So roughly, I clean up this data set based on my experience.

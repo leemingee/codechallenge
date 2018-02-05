@@ -1,0 +1,13 @@
+name: mingnycgreen
+title: mingnycgreen
+username:
+account: mingcolumbiads
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 272356
+bundleId: 1207363
+url: https://mingcolumbiads.shinyapps.io/mingnycgreen/
+when: 1517787280.10749
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: Icon|www/1.css|www/2.css|www/Icon|www/style.css
